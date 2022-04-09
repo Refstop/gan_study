@@ -6,6 +6,9 @@ from numpy.random import rand, randn
 from matplotlib import pyplot
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter, AutoMinorLocator
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+import time
+import tensorflow as tf
 
 def generate_latent_points(latent_dim, n):
         # 가우시안 분포로부터 데이터 벡터를 추출
@@ -114,7 +117,7 @@ def summarize_performance(epoch, generator, discriminator, latent_dim, n=100):
 #         pyplot.show()
 
 #       train the generator and discriminator
-def train(g_model, d_model, gan_model, latent_dim, n_epochs=100000, n_batch=128, n_eval=100000):
+def train(g_model, d_model, gan_model, latent_dim, n_epochs=100000, n_batch=128, n_eval=2000):
         #    determine half the size of one batch, for updating the discriminator
         half_batch = int(n_batch / 2)
         #    manually enumerate epochs
@@ -145,4 +148,7 @@ generator = define_generator(latent_dim)
 #     create the GAN
 gan_model = define_gan(generator, discriminator)
 #      train model
+start = time.time()
 train(generator, discriminator, gan_model, latent_dim)
+with open('time_gpu.txt', 'w') as f:
+        f.write(str(time.time() - start))
