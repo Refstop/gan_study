@@ -1,5 +1,3 @@
-# %matplotlib inline
-
 import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow.keras.datasets import mnist
@@ -48,8 +46,8 @@ def build_cgan_generator(z_dim):
     # 레이블 임베딩: 레이블을 z_dim 크기 밀집 벡터로 변환하고(batch_size,1,z_dim) 크기 3D 텐서를 만든다.
     # 밀집 벡터: 벡터의 표현법을 바꿔 더 작은 차원으로 표현하는 것
     # ex) 자연어 처리의 sparse/dense 표현의 예시
-    # 강아지의 sparse 표현 = [ 0 0 0 0 1 0 0 0 0 0 0 0... 중략... 0]
-    # 강아지의 dense 표현 = [0.2 1.8 1.1 -2.1 1.1 2.8... 중략...] # 이 벡터의 차원은 128
+    # 강아지의 sparse 표현 = [ 0 0 0 0 1 0 0 0 0 0 0 0... 중략... 0], 이 벡터의 차원은 1000
+    # 강아지의 dense 표현 = [0.2 1.8 1.1 -2.1 1.1 2.8... 중략...], 이 벡터의 차원은 128
     label_embedding=Embedding(num_classes,z_dim,input_length=1)(label)
     # 임베딩된 3D 텐서를 펼쳐서 (batch_size,z_dim) 크기 2D 텐서로 바꾼다
     label_embedding=Flatten()(label_embedding)
@@ -164,7 +162,7 @@ def train(iterations, batch_size, sample_interval):
 
     # 가짜 이미지의 레이블: 모두 0
     fake = np.zeros((batch_size, 1))
-
+    f = open("results/cgan/progress.txt", 'a')
     for iteration in range(iterations):
 
         # -------------------------
@@ -200,8 +198,9 @@ def train(iterations, batch_size, sample_interval):
         if (iteration + 1) % sample_interval == 0:
 
             # 훈련 과정을 출력합니다.
-            print("\n%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" %
-                  (iteration + 1, d_loss[0], 100 * d_loss[1], g_loss))
+            progress_info = "\n%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (iteration + 1, d_loss[0], 100*d_loss[1], g_loss)
+            print(progress_info)
+            f.write(progress_info)
 
             # 훈련이 끝난 후 그래프를 그리기 위해 손실과 정확도를 저장합니다.
             losses.append((d_loss[0], g_loss))
@@ -211,7 +210,7 @@ def train(iterations, batch_size, sample_interval):
             sample_images(iter=iteration + 1)
         else:
             print_progress(iteration + 1, iterations)
-
+    f.close()
         
 
 discriminator=build_cgan_discriminator(img_shape)
@@ -229,7 +228,7 @@ losses = []
 
 iterations=25000
 batch_size=32
-sample_interval=iterations/10
+sample_interval=1000
 
 train(iterations,batch_size,sample_interval)
 
