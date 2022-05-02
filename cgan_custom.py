@@ -5,7 +5,7 @@ from tensorflow.keras.layers import Dense, Input, multiply, Reshape, Concatenate
 from tensorflow.keras.layers import BatchNormalization, Embedding, Flatten, Dropout, Activation
 from tensorflow.keras.layers import LeakyReLU
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
-from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.models import Sequential, Model, save_model
 from tensorflow.keras.optimizers import Adam
 
 class CGAN:
@@ -20,25 +20,38 @@ class CGAN:
         self.build_cgan()
 
 
-    def build_generator(self):
+    def build_generator(self, mode):
         model = Sequential()
+        if mode == "custom":
+            model.add(Dense(256, input_dim = self.latent_dim))
+            model.add(LeakyReLU(alpha=0.2))
+            model.add(BatchNormalization(momentum=0.8))
+            model.add(Dense(512))
+            model.add(LeakyReLU(alpha=0.2))
+            model.add(BatchNormalization(momentum=0.8))
+            model.add(Dense(1024))
+            model.add(LeakyReLU(alpha=0.2))
+            model.add(BatchNormalization(momentum=0.8))
+            model.add(Dense(np.prod(self.img_shape)))
+            ## 사고해볼것 - 구별자의 input에 맞추기 위해 아무 생각 없이 reshape 해버렸지만...이래도 되는 걸까?
+            ## 결과: 학습 결과는 확인되지만, accuracy와 loss가 이상하다. 왜지?
+            model.add(Reshape((28,28,1)))
+            # model.add(Conv2DTranspose(1,kernel_size=3,strides=2,padding='same'))   #(28,28,1)
+            model.add(Activation('tanh'))
+        elif mode == "keras":
+            model.add(Dense(256*7*7, input_dim=self.latent_dim))
+            model.add(Reshape((7, 7, 256)))
 
-        model.add(Dense(256, input_dim = self.latent_dim))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(512))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(1024))
-        model.add(LeakyReLU(alpha=0.2))
-        model.add(BatchNormalization(momentum=0.8))
-        model.add(Dense(np.prod(self.img_shape)))
-        ## 사고해볼것 - 구별자의 input에 맞추기 위해 아무 생각 없이 reshape 해버렸지만...이래도 되는 걸까?
-        ## 결과: 어째선지 되는 듯 하다. 어차피 학습도 이 reshape값에 맞춰서 학습되기 때문인가? (학습중)
-        model.add(Reshape((28,28,1)))
-        # model.add(Conv2DTranspose(1,kernel_size=3,strides=2,padding='same'))   #(28,28,1)
-        model.add(Activation('tanh'))
+            model.add(Conv2DTranspose(128, kernel_size=3, strides=2, padding='same')) #(14,14,128)
+            model.add(BatchNormalization())
+            model.add(LeakyReLU(alpha=0.01))
 
+            model.add(Conv2DTranspose(64, kernel_size=3, strides=1, padding='same'))  #(14,14,64)
+            model.add(BatchNormalization())
+            model.add(LeakyReLU(alpha=0.01))
+
+            model.add(Conv2DTranspose(1, kernel_size=3, strides=2, padding='same'))   #(28,28,1)
+            model.add(Activation('tanh'))
         # model.summary()
 
         return model
@@ -57,7 +70,7 @@ class CGAN:
         ## 단일 벡터의 앙상블(모델 결합) - 그냥 요소별 곱셈
         model_input = multiply([noise, label_embedding])
 
-        img = self.build_generator()(model_input)
+        img = self.build_generator("custom")(model_input)
 
         return Model([noise, label], img)
 
@@ -242,3 +255,5 @@ if __name__ == '__main__':
     cgan = CGAN()
     cgan.train(epochs=25000, batch_size=32, sample_interval=1000)
     cgan.sample_test()
+    cgan.generator.save_weights('results/cgan_custom/generator_weights.h5', overwrite=True)
+    cgan.discriminator.save_weights('results/cgan_custom/discriminator_weights.h5', overwrite=True)
