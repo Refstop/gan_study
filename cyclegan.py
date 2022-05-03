@@ -8,13 +8,17 @@ from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.optimizers import Adam
 
+import tensorflow_datasets as tfds
+
 class CYCLEGAN:
     def __init__(self):
         self.path = "results/cyclegan/"
         pass
 
     def load_hz_example(self):
-        pass
+        dataset, _ = tfds.load("dataset/horse2zebra", with_info=True, as_supervised=True)
+        train_horses, train_zebras = dataset["trainA"], dataset["trainB"]
+        test_horses, test_zebras = dataset["testA"], dataset["testB"]
 
     def build_generator_xy(self):
         pass

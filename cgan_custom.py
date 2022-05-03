@@ -70,29 +70,46 @@ class CGAN:
         ## 단일 벡터의 앙상블(모델 결합) - 그냥 요소별 곱셈
         model_input = multiply([noise, label_embedding])
 
-        img = self.build_generator("custom")(model_input)
+        img = self.build_generator("keras")(model_input)
 
         return Model([noise, label], img)
 
 
-    def build_discriminator(self):
+    def build_discriminator(self, mode):
         model = Sequential()
 
-        ## 28x28x1 -> 14*14*64
-        ## 왜 28*28*2??
-        model.add(Conv2D(64, kernel_size=3, strides=2, padding='same', input_shape=(self.img_shape[0],self.img_shape[1],self.img_shape[2]+1)))
-        model.add(LeakyReLU(alpha=0.01))
-        ## 14*14*64 -> 7*7*64
-        model.add(Dropout(0.4))
-        model.add(Conv2D(64, kernel_size=3, strides=2, padding='same'))
-        model.add(LeakyReLU(alpha=0.01))
-        ## 7*7*64 -> 3*3*128
-        model.add(Dropout(0.4))
-        model.add(Conv2D(128, kernel_size=3, strides=2, padding='same'))
-        model.add(LeakyReLU(alpha=0.01))
+        if mode == "custom":
+            ## 28x28x1 -> 14*14*64
+            ## 왜 28*28*2??
+            model.add(Conv2D(64, kernel_size=3, strides=2, padding='same', input_shape=(self.img_rows, self.img_cols, self.channels+1)))
+            model.add(LeakyReLU(alpha=0.01))
+            ## 14*14*64 -> 7*7*64
+            model.add(Dropout(0.4))
+            model.add(Conv2D(64, kernel_size=3, strides=2, padding='same'))
+            model.add(LeakyReLU(alpha=0.01))
+            ## 7*7*64 -> 3*3*128
+            model.add(Dropout(0.4))
+            model.add(Conv2D(128, kernel_size=3, strides=2, padding='same'))
+            model.add(LeakyReLU(alpha=0.01))
 
-        model.add(Flatten())
-        model.add(Dense(1,activation='sigmoid'))
+            model.add(Flatten())
+            model.add(Dense(1,activation='sigmoid'))
+        elif mode == "keras":
+            model.add( # (28,28,2) 에서 (14,14,64) 텐서로 바꾸는 합성곱 층
+                      Conv2D(64,kernel_size=3,strides=2,input_shape=(img_shape[0],img_shape[1],img_shape[2] +1),
+                             padding='same'))
+            model.add(LeakyReLU(alpha=0.01))
+
+            model.add( # (14,14,64) 에서 (7,7,64) 텐서로 바꾸는 합성곱 층
+                      Conv2D(64,kernel_size=3,strides=2,padding='same'))
+            model.add(LeakyReLU(alpha=0.01))
+
+            model.add( # (7,7,64) 에서 (3,3,128) 텐서로 바꾸는 합성곱 층
+                      Conv2D(128,kernel_size=3,strides=2,padding='same'))
+            model.add(LeakyReLU(alpha=0.01))
+
+            model.add(Flatten())
+            model.add(Dense(1,activation='sigmoid'))
 
         # model.summary()
 
@@ -112,7 +129,7 @@ class CGAN:
         ## 아래 코드에서는 img input 레이어와 label_embedding 레이어를 결합한다.
         model_input=Concatenate(axis=-1)([img,label_embedding])
         
-        validity = self.build_discriminator()(model_input)
+        validity = self.build_discriminator("keras")(model_input)
 
         return Model([img, label], validity)
 
@@ -155,7 +172,7 @@ class CGAN:
         valid = np.ones((batch_size, 1))
         ## 가짜 이미지의 레이블: 전부 0
         fake = np.zeros((batch_size, 1))
-        f = open("results/cgan_custom/progress.txt", 'a')
+        f = open("results/cgan_custom/keras/progress.txt", 'a')
         for epoch in range(epochs):
             ## 학습시킬 레이블을 랜덤으로 지정
             idx = np.random.randint(0, X_train.shape[0], batch_size)
@@ -205,7 +222,7 @@ class CGAN:
                 axs[i,j].set_title("Digit: %d" % sampled_labels[cnt])
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("results/cgan_custom/%d.png" % epoch)
+        fig.savefig("results/cgan_custom/keras/%d.png" % epoch)
         plt.close()
 
     def sample_test(self):
@@ -244,7 +261,7 @@ class CGAN:
                 # plt.savefig(str1,dpi=150)
                 cnt += 1
 
-        str1='results/cgan_custom/result.pdf'
+        str1='results/cgan_custom/keras/result.pdf'
         plt.savefig(str1,dpi=150)
 
     def print_progress(self, cur, fin):
@@ -255,5 +272,5 @@ if __name__ == '__main__':
     cgan = CGAN()
     cgan.train(epochs=25000, batch_size=32, sample_interval=1000)
     cgan.sample_test()
-    cgan.generator.save_weights('results/cgan_custom/generator_weights.h5', overwrite=True)
-    cgan.discriminator.save_weights('results/cgan_custom/discriminator_weights.h5', overwrite=True)
+    cgan.generator.save_weights('results/cgan_custom/keras/generator_weights.h5', overwrite=True)
+    cgan.discriminator.save_weights('results/cgan_custom/keras/discriminator_weights.h5', overwrite=True)
