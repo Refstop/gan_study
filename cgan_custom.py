@@ -16,6 +16,7 @@ class CGAN:
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
         self.num_classes = 10
         self.latent_dim = 100
+        self.mode = "custom"
 
         self.build_cgan()
 
@@ -70,7 +71,7 @@ class CGAN:
         ## 단일 벡터의 앙상블(모델 결합) - 그냥 요소별 곱셈
         model_input = multiply([noise, label_embedding])
 
-        img = self.build_generator("keras")(model_input)
+        img = self.build_generator(self.mode)(model_input)
 
         return Model([noise, label], img)
 
@@ -96,7 +97,7 @@ class CGAN:
             model.add(Dense(1,activation='sigmoid'))
         elif mode == "keras":
             model.add( # (28,28,2) 에서 (14,14,64) 텐서로 바꾸는 합성곱 층
-                      Conv2D(64,kernel_size=3,strides=2,input_shape=(img_shape[0],img_shape[1],img_shape[2] +1),
+                      Conv2D(64,kernel_size=3,strides=2,input_shape=(self.img_rows, self.img_cols, self.channels+1),
                              padding='same'))
             model.add(LeakyReLU(alpha=0.01))
 
@@ -129,7 +130,7 @@ class CGAN:
         ## 아래 코드에서는 img input 레이어와 label_embedding 레이어를 결합한다.
         model_input=Concatenate(axis=-1)([img,label_embedding])
         
-        validity = self.build_discriminator("keras")(model_input)
+        validity = self.build_discriminator(self.mode)(model_input)
 
         return Model([img, label], validity)
 
