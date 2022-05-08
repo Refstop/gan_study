@@ -26,7 +26,7 @@ class CYCLEGAN:
 
         self.OUTPUT_CHANNELS = 3
         self.LAMBDA = 10
-        self.EPOCHS = 40
+        self.EPOCHS = 10
         self.loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
     def random_crop(self, image):
