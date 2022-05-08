@@ -312,7 +312,7 @@ class CYCLEGAN:
             for image_x, image_y in tf.data.Dataset.zip((self.train_horses, self.train_zebras)):
                 if n % 100 == 0:
                     total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss = self.train_step(image_x, image_y)
-                    progress_info = "\n%d [Dx loss: %f, Dy loss: %f] [G_g loss: %f, G_f loss: %f]" % (epoch + 1, total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss)
+                    progress_info = "\n%d [Dx loss: %f, Dy loss: %f] [G_g loss: %f, G_f loss: %f]" % (epoch + 1, disc_x_loss, disc_y_loss, total_gen_g_loss, total_gen_f_loss)
                     print(progress_info)
                     f.write(progress_info)
                 else:
