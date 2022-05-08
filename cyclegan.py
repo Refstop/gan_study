@@ -7,7 +7,6 @@ from IPython.display import clear_output
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-# from tensorflow_examples.models.pix2pix import pix2pix
 
 import tensorflow_addons as tfa
 import tensorflow_datasets as tfds
@@ -195,11 +194,6 @@ class CYCLEGAN:
         generator_f = self.build_generator(self.OUTPUT_CHANNELS)
         return generator_g, generator_f
 
-    # def build_generator_gf_pix2pix(self):
-    #     generator_g = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
-    #     generator_f = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
-    #     return generator_g, generator_f
-
     def build_discriminator(self):
         initializer = tf.random_normal_initializer(0., 0.02)
 
@@ -239,11 +233,6 @@ class CYCLEGAN:
         discriminator_y = self.build_discriminator()
         return discriminator_x, discriminator_y
 
-    # def build_discriminator_xy_pix2pix(self):
-    #     discriminator_x = pix2pix.discriminator(norm_type='instancenorm', target=False)
-    #     discriminator_y = pix2pix.discriminator(norm_type='instancenorm', target=False)
-    #     return discriminator_x, discriminator_y
-
     def calc_cycle_loss(self, real_image, cycled_image):
         loss1 = tf.reduce_mean(tf.abs(real_image - cycled_image))
         return self.LAMBDA * loss1
@@ -261,10 +250,6 @@ class CYCLEGAN:
             # Generator F translates Y -> X.
             self.generator_g, generator_f = self.build_generator_gf()
             discriminator_x, discriminator_y = self.build_discriminator_xy()
-            # self.generator_g = self.build_generator(self.OUTPUT_CHANNELS)
-            # generator_f = self.build_generator(self.OUTPUT_CHANNELS)
-            # discriminator_x = self.build_discriminator()
-            # discriminator_y = self.build_discriminator()
 
             fake_y = self.generator_g(real_x, training=True)
             cycled_x = generator_f(fake_y, training=True)
@@ -324,7 +309,7 @@ class CYCLEGAN:
             for image_x, image_y in tf.data.Dataset.zip((self.train_horses, self.train_zebras)):
                 self.train_step(image_x, image_y)
                 if n % 10 == 0:
-                    print ('.', end='')
+                    print ("{} ".format(n), end='')
                 n+=1
 
             clear_output(wait=True)
@@ -371,6 +356,5 @@ if __name__ == "__main__":
     cyclegan.load_hz_example()
     cyclegan.train(sample_interval=10)
     cyclegan.generate_images(cyclegan.generator_g, cyclegan.sample_horse)
-    # cyclegan.sample_test()
     # cyclegan.generator.save_weights(cyclegan.path + 'generator_weights.h5', overwrite=True)
     # cyclegan.discriminator.save_weights(cyclegan.path + 'discriminator_weights.h5', overwrite=True)
