@@ -18,9 +18,7 @@ autotune = tf.data.AUTOTUNE
 class CYCLEGAN:
     def __init__(self):
         self.path = "results/cyclegan/"
-        # Define the standard image size.
-        self.orig_img_size = (286, 286)
-        # Size of the random crops to be used during training.
+        self.orig_img_size = (286, 286).
         self.input_img_size = (256, 256, 3)
 
         self.buffer_size = 256
@@ -32,8 +30,7 @@ class CYCLEGAN:
         self.loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
     def random_crop(self, image):
-        cropped_image = tf.image.random_crop(
-            image, size=self.input_img_size)
+        cropped_image = tf.image.random_crop(image, size=self.input_img_size)
 
         return cropped_image
 
@@ -44,12 +41,9 @@ class CYCLEGAN:
 
     def random_jitter(self, image):
         # resizing to 286 x 286 x 3
-        image = tf.image.resize(image, self.orig_img_size,
-                                method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-
+        image = tf.image.resize(image, self.orig_img_size, method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
         # randomly cropping to 256 x 256 x 3
         image = self.random_crop(image)
-
         # random mirroring
         image = tf.image.random_flip_left_right(image)
 
@@ -104,12 +98,11 @@ class CYCLEGAN:
 
         result = tf.keras.Sequential()
         # 다운샘플링은 컨벌루션을 사용
-        result.add(
-            tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',
+        result.add(tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',
                                     kernel_initializer=initializer, use_bias=False))
 
         if apply_batchnorm:
-          result.add(tf.keras.layers.BatchNormalization())
+            result.add(tf.keras.layers.BatchNormalization())
 
         result.add(tf.keras.layers.LeakyReLU())
 
@@ -120,8 +113,7 @@ class CYCLEGAN:
 
         result = tf.keras.Sequential()
         # 업샘플링은 컨벌루션 트랜스포즈(역컨벌루션과 비슷한 역할) 사용
-        result.add(
-          tf.keras.layers.Conv2DTranspose(filters, size, strides=2,
+        result.add(tf.keras.layers.Conv2DTranspose(filters, size, strides=2,
                                             padding='same',
                                             kernel_initializer=initializer,
                                             use_bias=False))
@@ -169,23 +161,31 @@ class CYCLEGAN:
 
         x = inputs
 
-        # Downsampling through the model
+        # 다운샘플링 레이어에 두번째 갈래의 화살표를 추가
         skips = []
         for down in down_stack:
-          x = down(x)
-          skips.append(x)
-
+            # down(down(down(...down(x))))
+            x = down(x)
+            # skips에 각 x들을 skips에 추가 [down(x), down(down(x)), down(down(down(x))), ...]
+            skips.append(x)
+        # 다샘 맨앞 레이어랑 업샘플링 맨끝 레이어랑 연결하기 위해 뒤집음
+        # [down(down(down(x))), ..., down(down(x)), down(x)]
         skips = reversed(skips[:-1])
 
-        # Upsampling and establishing the skip connections
+        # 업샘플링 레이어에 두번째 갈래의 화살표를 추가
         for up, skip in zip(up_stack, skips):
-          x = up(x)
-          x = tf.keras.layers.Concatenate()([x, skip])
+            x = up(x)
+            # 각각의 업샘 레이어와 대응되는 다샘 레이어 연결
+            # [up(x)와 down(down(down(...down(x))))], ..., [up(up(...up(x)))와 down(down(x))], [up(up(up(...up(x))))와 down(x)]
+            # 업10, 다10이 최대일때: [업1, 다10], [업2, 다9], [업3, 다8], ..., [업9, 다2], [업10, 다1]
+            x = tf.keras.layers.Concatenate()([x, skip])
 
+        # 다샘, 업샘 + 스킵으로 만든 레이어 통합
         x = last(x)
 
         return tf.keras.Model(inputs=inputs, outputs=x)
     
+    # 생성자 오차 
     def generator_loss(self, generated):
         return self.loss_obj(tf.ones_like(generated), generated)
 
@@ -300,6 +300,8 @@ class CYCLEGAN:
         discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients, discriminator_x.trainable_variables))
         discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients, discriminator_y.trainable_variables))
 
+        return total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss
+
     def train(self, sample_interval):
         print("start train")
         f = open(self.path + "progress.txt", 'a')
@@ -308,7 +310,13 @@ class CYCLEGAN:
             start = time.time()
 
             for image_x, image_y in tf.data.Dataset.zip((self.train_horses, self.train_zebras)):
-                self.train_step(image_x, image_y)
+                if n % 100 == 0:
+                    total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss = self.train_step(image_x, image_y)
+                    progress_info = "\n%d [Dx loss: %f, Dy loss: %f] [G_g loss: %f, G_f loss: %f]" % (epoch + 1, total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss)
+                    print(progress_info)
+                    f.write(progress_info)
+                else:
+                    self.train_step(image_x, image_y)
                 self.print_progress(n, len(self.train_horses)*self.EPOCHS)
                 n+=1
 
@@ -317,11 +325,6 @@ class CYCLEGAN:
             # is clearly visible.
 
             if (epoch + 1) % sample_interval == 0:
-                # progress_info = "\n%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (epoch + 1, d_loss[0], 100*d_loss[1], g_loss)
-                # print(progress_info)
-                # f.write(progress_info)
-                # ckpt_save_path = ckpt_manager.save()
-                # print ('Saving checkpoint for epoch {} at {}'.format(epoch+1, ckpt_save_path))
                 print('Saving sample for epoch {}'.format(epoch+1))
                 self.generate_images(self.generator_g, self.sample_horse, epoch+1)
             else:
@@ -354,7 +357,7 @@ class CYCLEGAN:
 if __name__ == "__main__":
     cyclegan = CYCLEGAN()
     cyclegan.load_hz_example()
-    cyclegan.train(sample_interval=10)
+    cyclegan.train(sample_interval=1)
     cyclegan.generate_images(cyclegan.generator_g, cyclegan.sample_horse)
     # cyclegan.generator.save_weights(cyclegan.path + 'generator_weights.h5', overwrite=True)
     # cyclegan.discriminator.save_weights(cyclegan.path + 'discriminator_weights.h5', overwrite=True)
