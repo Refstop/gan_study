@@ -18,7 +18,7 @@ autotune = tf.data.AUTOTUNE
 class CYCLEGAN:
     def __init__(self):
         self.path = "results/cyclegan/"
-        self.orig_img_size = (286, 286).
+        self.orig_img_size = (286, 286)
         self.input_img_size = (256, 256, 3)
 
         self.buffer_size = 256
