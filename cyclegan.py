@@ -185,37 +185,45 @@ class CYCLEGAN:
 
         return tf.keras.Model(inputs=inputs, outputs=x)
     
-    # 생성자 오차 
     def generator_loss(self, generated):
         return self.loss_obj(tf.ones_like(generated), generated)
 
+    # 생성자 g: x도메인을 y도메인으로
+    # 생성자 f: y도메인을 x도메인으로
     def build_generator_gf(self):
         generator_g = self.build_generator(self.OUTPUT_CHANNELS)
         generator_f = self.build_generator(self.OUTPUT_CHANNELS)
         return generator_g, generator_f
-
+    
+    # 판별자 - patchgan
     def build_discriminator(self):
         initializer = tf.random_normal_initializer(0., 0.02)
 
+        # 인풋 형식
         inp = tf.keras.layers.Input(shape=[256, 256, 3], name='input_image')
 
         x = inp # (bs, 256, 256, channels*2)
 
+        # 다운샘플링 레이어 3개
         down1 = self.downsample(64, 4, False)(x) # (bs, 128, 128, 64)
         down2 = self.downsample(128, 4)(down1) # (bs, 64, 64, 128)
         down3 = self.downsample(256, 4)(down2) # (bs, 32, 32, 256)
 
+        # 제로 패딩
         zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3) # (bs, 34, 34, 256)
+
+        # 컨벌루션
         conv = tf.keras.layers.Conv2D(512, 4, strides=1,
                                     kernel_initializer=initializer,
                                     use_bias=False)(zero_pad1) # (bs, 31, 31, 512)
-
+        
+        # 배치정규화
         batchnorm1 = tf.keras.layers.BatchNormalization()(conv)
-
+        # 활성화함수
         leaky_relu = tf.keras.layers.LeakyReLU()(batchnorm1)
-
+        # 제로패딩
         zero_pad2 = tf.keras.layers.ZeroPadding2D()(leaky_relu) # (bs, 33, 33, 512)
-
+        # 컨벌루션
         last = tf.keras.layers.Conv2D(1, 4, strides=1,
                                     kernel_initializer=initializer)(zero_pad2) # (bs, 30, 30, 1)
 
@@ -241,7 +249,6 @@ class CYCLEGAN:
         loss = tf.reduce_mean(tf.abs(real_image - same_image))
         return self.LAMBDA * 0.5 * loss
 
-    # @tf.function
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
         # once to calculate the gradients.
@@ -251,19 +258,26 @@ class CYCLEGAN:
             # Generator F translates Y -> X.
             self.generator_g, generator_f = self.build_generator_gf()
             discriminator_x, discriminator_y = self.build_discriminator_xy()
+
+            # fake_y: 가짜 y, cycled_x: 가짜 y로 만든 가짜 x
             fake_y = self.generator_g(real_x, training=True)
             cycled_x = generator_f(fake_y, training=True)
 
+            # fake_x: 가짜 x, cycled_y: 가짜 x로 만든 가짜 y
             fake_x = generator_f(real_y, training=True)
             cycled_y = self.generator_g(fake_x, training=True)
 
             # same_x and same_y are used for identity loss.
+            # same_x: 진짜 x를 재료로 fake_x(y-x)에 넣어서 만든 가짜 x
             same_x = generator_f(real_x, training=True)
             same_y = self.generator_g(real_y, training=True)
 
+            # 진짜 x를 검사한 결과를 학습한 판별자
             disc_real_x = discriminator_x(real_x, training=True)
             disc_real_y = discriminator_y(real_y, training=True)
 
+            # 가짜 x를 검사한 결과를 학습한 판별자 - 성공적으로 학습하면 0에 가깝게 나온다.
+            # max D: 오차값이 높게 나오면 가짜임을 의미하고, 판별자의 결과는 그걸 보고 0으로 결과를 낸다.
             disc_fake_x = discriminator_x(fake_x, training=True)
             disc_fake_y = discriminator_y(fake_y, training=True)
 
@@ -281,6 +295,7 @@ class CYCLEGAN:
             disc_y_loss = self.discriminator_loss(disc_real_y, disc_fake_y)
 
         # Calculate the gradients for generator and discriminator
+        # ??
         generator_g_gradients = tape.gradient(total_gen_g_loss, self.generator_g.trainable_variables)
         generator_f_gradients = tape.gradient(total_gen_f_loss, generator_f.trainable_variables)
 
