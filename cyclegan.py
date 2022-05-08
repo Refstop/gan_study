@@ -44,7 +44,7 @@ class CYCLEGAN:
 
     def random_jitter(self, image):
         # resizing to 286 x 286 x 3
-        image = tf.image.resize(image, [286, 286],
+        image = tf.image.resize(image, self.orig_img_size,
                                 method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 
         # randomly cropping to 256 x 256 x 3
@@ -245,12 +245,12 @@ class CYCLEGAN:
     def train_step(self, real_x, real_y):
         # persistent is set to True because the tape is used more than
         # once to calculate the gradients.
+        # print("train_step")
         with tf.GradientTape(persistent=True) as tape:
             # Generator G translates X -> Y
             # Generator F translates Y -> X.
             self.generator_g, generator_f = self.build_generator_gf()
             discriminator_x, discriminator_y = self.build_discriminator_xy()
-
             fake_y = self.generator_g(real_x, training=True)
             cycled_x = generator_f(fake_y, training=True)
 
@@ -301,15 +301,15 @@ class CYCLEGAN:
         discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients, discriminator_y.trainable_variables))
 
     def train(self, sample_interval):
+        print("start train")
         f = open(self.path + "progress.txt", 'a')
+        n=0
         for epoch in range(self.EPOCHS):
             start = time.time()
 
-            n = 0
             for image_x, image_y in tf.data.Dataset.zip((self.train_horses, self.train_zebras)):
                 self.train_step(image_x, image_y)
-                if n % 10 == 0:
-                    print ("{} ".format(n), end='')
+                self.print_progress(n, len(self.train_horses)*self.EPOCHS)
                 n+=1
 
             clear_output(wait=True)
@@ -325,7 +325,7 @@ class CYCLEGAN:
                 print('Saving sample for epoch {}'.format(epoch+1))
                 self.generate_images(self.generator_g, self.sample_horse, epoch+1)
             else:
-                self.print_progress(epoch + 1, self.EPOCH)
+                self.print_progress(epoch + 1, self.EPOCHS)
 
             print('Time taken for epoch {} is {} sec\n'.format(epoch + 1, time.time()-start))
         f.close()
