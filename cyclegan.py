@@ -1,33 +1,34 @@
+import tensorflow as tf
+
+import tensorflow_datasets as tfds
+from tensorflow_examples.models.pix2pix import pix2pix
+
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 import time
+import matplotlib.pyplot as plt
 from IPython.display import clear_output
 
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-
-import tensorflow_addons as tfa
-import tensorflow_datasets as tfds
-
-tfds.disable_progress_bar()
 autotune = tf.data.AUTOTUNE
-
 
 class CYCLEGAN:
     def __init__(self):
         self.path = "results/cyclegan/"
-        self.orig_img_size = (286, 286)
-        self.input_img_size = (256, 256, 3)
+        self.orig_img_size = (286, 286) # 원본 이미지 사이즈
+        self.input_img_size = (256, 256, 3) # 입력 이미지 사이즈
+        
+        self.buffer_size = 1000 # 버퍼 사이즈
+        self.batch_size = 100 # 배치 사이즈
 
-        self.buffer_size = 256
-        self.batch_size = 1
+        self.OUTPUT_CHANNELS = 3 # 출력 채널
+        self.LAMBDA = 10 # 람다(loss 함수에 사용)
+        self.EPOCHS = 10 # 에폭
+        self.loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True) # loss 함수 형태 - 이진 크로스엔트로피
+        self.generator_g_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+        self.generator_f_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
-        self.OUTPUT_CHANNELS = 3
-        self.LAMBDA = 10
-        self.EPOCHS = 10
-        self.loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+        # Apply the gradients to the optimizer
+        self.discriminator_x_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+        self.discriminator_y_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
     def random_crop(self, image):
         cropped_image = tf.image.random_crop(image, size=self.input_img_size)
@@ -49,12 +50,12 @@ class CYCLEGAN:
 
         return image
     
-    def preprocess_train_image(self, img, label):
+    def preprocess_image_train(self, img, label):
         img = self.random_jitter(img)
         img = self.normalize_img(img)
         return img
 
-    def preprocess_test_image(self, img, label):
+    def preprocess_image_test(self, img, label):
         img = self.normalize_img(img)
         return img
 
@@ -63,32 +64,21 @@ class CYCLEGAN:
         self.train_horses, self.train_zebras = dataset["trainA"], dataset["trainB"]
         self.test_horses, self.test_zebras = dataset["testA"], dataset["testB"]
 
-        self.train_horses = (
-            self.train_horses.map(self.preprocess_train_image, num_parallel_calls=autotune)
-            .cache()
-            .shuffle(self.buffer_size)
-            .batch(self.batch_size)
-        )
-        self.train_zebras = (
-            self.train_zebras.map(self.preprocess_train_image, num_parallel_calls=autotune)
-            .cache()
-            .shuffle(self.buffer_size)
-            .batch(self.batch_size)
-        )
+        self.train_horses = self.train_horses.cache().map(
+            self.preprocess_image_train, num_parallel_calls=autotune).shuffle(
+            self.buffer_size).batch(self.batch_size)
 
-        # Apply the preprocessing operations to the test data
-        self.test_horses = (
-            self.test_horses.map(self.preprocess_test_image, num_parallel_calls=autotune)
-            .cache()
-            .shuffle(self.buffer_size)
-            .batch(self.batch_size)
-        )
-        self.test_zebras = (
-            self.test_zebras.map(self.preprocess_test_image, num_parallel_calls=autotune)
-            .cache()
-            .shuffle(self.buffer_size)
-            .batch(self.batch_size)
-        )
+        self.train_zebras = self.train_zebras.cache().map(
+            self.preprocess_image_train, num_parallel_calls=autotune).shuffle(
+            self.buffer_size).batch(self.batch_size)
+
+        self.test_horses = self.test_horses.map(
+            self.preprocess_image_test, num_parallel_calls=autotune).cache().shuffle(
+            self.buffer_size).batch(self.batch_size)
+
+        self.test_zebras = self.test_zebras.map(
+            self.preprocess_image_test, num_parallel_calls=autotune).cache().shuffle(
+            self.buffer_size).batch(self.batch_size)
 
         self.sample_horse = next(iter(self.train_horses))
         self.sample_zebra = next(iter(self.train_zebras))
@@ -194,6 +184,11 @@ class CYCLEGAN:
         generator_g = self.build_generator(self.OUTPUT_CHANNELS)
         generator_f = self.build_generator(self.OUTPUT_CHANNELS)
         return generator_g, generator_f
+
+    def build_generator_gf_pix2pix(self):
+        generator_g = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
+        generator_f = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
+        return generator_g, generator_f
     
     # 판별자 - patchgan
     def build_discriminator(self):
@@ -241,6 +236,11 @@ class CYCLEGAN:
         discriminator_y = self.build_discriminator()
         return discriminator_x, discriminator_y
 
+    def build_discriminator_xy_pix2pix(self):
+        discriminator_x = pix2pix.discriminator(norm_type='instancenorm', target=False)
+        discriminator_y = pix2pix.discriminator(norm_type='instancenorm', target=False)
+        return discriminator_x, discriminator_y
+
     def calc_cycle_loss(self, real_image, cycled_image):
         loss1 = tf.reduce_mean(tf.abs(real_image - cycled_image))
         return self.LAMBDA * loss1
@@ -258,6 +258,9 @@ class CYCLEGAN:
             # Generator F translates Y -> X.
             self.generator_g, generator_f = self.build_generator_gf()
             discriminator_x, discriminator_y = self.build_discriminator_xy()
+            ## pix2pix version
+            # self.generator_g, generator_f = self.build_generator_gf_pix2pix()
+            # discriminator_x, discriminator_y = self.build_discriminator_xy_pix2pix()
 
             # fake_y: 가짜 y, cycled_x: 가짜 y로 만든 가짜 x
             fake_y = self.generator_g(real_x, training=True)
@@ -281,10 +284,11 @@ class CYCLEGAN:
             disc_fake_x = discriminator_x(fake_x, training=True)
             disc_fake_y = discriminator_y(fake_y, training=True)
 
-            # calculate the loss
+            # 생성자의 오차값 계산
             gen_g_loss = self.generator_loss(disc_fake_y)
             gen_f_loss = self.generator_loss(disc_fake_x)
 
+            # 사이클 로스
             total_cycle_loss = self.calc_cycle_loss(real_x, cycled_x) + self.calc_cycle_loss(real_y, cycled_y)
 
             # Total generator loss = adversarial loss + cycle loss
@@ -302,18 +306,11 @@ class CYCLEGAN:
         discriminator_x_gradients = tape.gradient(disc_x_loss, discriminator_x.trainable_variables)
         discriminator_y_gradients = tape.gradient(disc_y_loss, discriminator_y.trainable_variables)
 
-        generator_g_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-        generator_f_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+        self.generator_g_optimizer.apply_gradients(zip(generator_g_gradients, self.generator_g.trainable_variables))
+        self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, generator_f.trainable_variables))
 
-        # Apply the gradients to the optimizer
-        discriminator_x_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-        discriminator_y_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-
-        generator_g_optimizer.apply_gradients(zip(generator_g_gradients, self.generator_g.trainable_variables))
-        generator_f_optimizer.apply_gradients(zip(generator_f_gradients, generator_f.trainable_variables))
-
-        discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients, discriminator_x.trainable_variables))
-        discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients, discriminator_y.trainable_variables))
+        self.discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients, discriminator_x.trainable_variables))
+        self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients, discriminator_y.trainable_variables))
 
         return total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss
 
@@ -360,8 +357,8 @@ class CYCLEGAN:
             plt.subplot(1, 2, i+1)
             plt.title(title[i])
             # getting the pixel values between [0, 1] to plot it.
-            # plt.imshow(display_list[i] * 0.5 + 0.5)
-            # plt.axis('off')
+            plt.imshow(display_list[i] * 0.5 + 0.5)
+            plt.axis('off')
         plt.savefig(self.path + "{}.png".format(epoch))
         # plt.show()
 
