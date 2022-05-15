@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 import tensorflow_datasets as tfds
-from tensorflow_examples.models.pix2pix import pix2pix
+# from tensorflow_examples.models.pix2pix import pix2pix
 
 import os
 import time
@@ -185,10 +185,10 @@ class CYCLEGAN:
         generator_f = self.build_generator(self.OUTPUT_CHANNELS)
         return generator_g, generator_f
 
-    def build_generator_gf_pix2pix(self):
-        generator_g = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
-        generator_f = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
-        return generator_g, generator_f
+    # def build_generator_gf_pix2pix(self):
+    #     generator_g = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
+    #     generator_f = pix2pix.unet_generator(self.OUTPUT_CHANNELS, norm_type='instancenorm')
+    #     return generator_g, generator_f
     
     # 판별자 - patchgan
     def build_discriminator(self):
@@ -236,10 +236,10 @@ class CYCLEGAN:
         discriminator_y = self.build_discriminator()
         return discriminator_x, discriminator_y
 
-    def build_discriminator_xy_pix2pix(self):
-        discriminator_x = pix2pix.discriminator(norm_type='instancenorm', target=False)
-        discriminator_y = pix2pix.discriminator(norm_type='instancenorm', target=False)
-        return discriminator_x, discriminator_y
+    # def build_discriminator_xy_pix2pix(self):
+    #     discriminator_x = pix2pix.discriminator(norm_type='instancenorm', target=False)
+    #     discriminator_y = pix2pix.discriminator(norm_type='instancenorm', target=False)
+    #     return discriminator_x, discriminator_y
 
     def calc_cycle_loss(self, real_image, cycled_image):
         loss1 = tf.reduce_mean(tf.abs(real_image - cycled_image))
